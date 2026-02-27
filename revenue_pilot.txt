@@ -1,0 +1,22 @@
+revenue_pilot/
+├── agents/
+│   ├── __init__.py          ← exports all agents cleanly
+│   ├── orchestrator.py
+│   ├── base_agent.py
+│   ├── data_agent.py
+│   ├── risk_agent.py
+│   ├── strategy_agent.py
+│   ├── execution_agent.py
+│   └── audit_agent.py
+├── frontend/
+│   ├── package.json         ← React 18, Axios, react-scripts
+│   └── src/components/
+│       └── Dashboard.jsx
+├── utils/
+│   ├── __init__.py
+│   └── mock_data.py
+├── main.py
+├── config.py
+├── requirements.txt         ← FastAPI, uvicorn, pydantic, dotenv, pandas
+├── .env.example             ← Snowflake + Composio + app settings
+└── README.md                ← full setup guide, API reference, risk model docs

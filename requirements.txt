@@ -1,0 +1,30 @@
+# RevenuePilot – Python dependencies
+# Install with: pip install -r requirements.txt
+
+# API framework
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+
+# Data validation
+pydantic==2.10.3
+
+# Environment variables
+python-dotenv==1.0.1
+
+# Data processing
+pandas==2.2.3
+
+# Snowflake connector (comment out if not using Snowflake yet)
+# snowflake-connector-python==3.12.4
+# snowflake-sqlalchemy==1.6.1
+
+# Composio integration (comment out if not using Composio yet)
+# composio-core==0.6.0
+
+# HTTP client (for agent-to-agent calls if needed)
+httpx==0.28.1
+
+# Testing
+pytest==8.3.4
+pytest-asyncio==0.25.2
+httpx==0.28.1   # also used as AsyncClient in tests

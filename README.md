@@ -1,112 +1,187 @@
-# RevenuePilot  
-## Autonomous Multi-Agent Revenue Intelligence System
+# RevenuePilot
+
+**Autonomous Multi-Agent Revenue Intelligence System**
+
+RevenuePilot detects, prioritizes, and acts on at-risk revenue signals within enterprise data environments — replacing manual spreadsheet triage with a coordinated AI agent pipeline.
 
 ---
 
-### Overview
+## Architecture
 
-RevenuePilot is a multi-agent AI system designed to autonomously detect, prioritize, and act on at-risk revenue signals within enterprise data environments.  
+```
+Accounts (CRM / Snowflake)
+        │
+        ▼
+┌─────────────────────────────────────────────────────┐
+│               RevenuePilotOrchestrator              │
+│                                                     │
+│  DataAgent → RiskAgent → StrategyAgent              │
+│                              │                      │
+│                     ExecutionAgent ←── Human HITL   │
+│                              │                      │
+│                         AuditAgent                  │
+└─────────────────────────────────────────────────────┘
+        │
+        ▼
+  FastAPI  ←→  React Dashboard
+```
 
-Rather than serving as a passive dashboard, RevenuePilot reasons across structured data, plans multi-step recovery strategies, collaborates with human operators, and executes revenue-preserving workflows in real time.
-
----
-
-### Why This Matters
-
-Revenue operations are fragmented across CRM systems, finance platforms, and communication tools. Teams react manually to:
-
-- Overdue invoices  
-- Churn signals  
-- Dormant enterprise accounts  
-- Delayed procurement cycles  
-
-RevenuePilot transforms static reporting into autonomous action, providing measurable business impact.
-
----
-
-### Agent Architecture
-
-RevenuePilot uses specialized agents collaborating in a structured orchestration layer:
-
-#### DataAgent
-- Queries structured financial data (Snowflake-ready)  
-- Detects overdue and high-risk accounts  
-
-#### RiskAgent
-- Evaluates probability of recovery  
-- Identifies churn signals and escalation triggers  
-
-#### StrategyAgent
-- Designs multi-step recovery workflows  
-- Selects tone, timing, and incentive strategy  
-
-#### ExecutionAgent
-- Drafts and prepares outreach actions  
-- Integrates with communication tools (Gmail, Slack, CRM via Composio)  
-
-#### AuditAgent
-- Tracks measurable outcomes  
-- Logs projected recovery impact  
-- Maintains explainability  
+| Agent | Responsibility |
+|---|---|
+| **DataAgent** | Queries Snowflake for overdue invoices, usage drops, payment delays |
+| **RiskAgent** | Scores each account 0–1 across four weighted signals |
+| **StrategyAgent** | Selects and customises a multi-step recovery playbook |
+| **ExecutionAgent** | Sends emails/Slack via Composio; queues high-value actions for human approval |
+| **AuditAgent** | Tracks metrics, generates executive summaries, maintains explainability |
 
 ---
 
-### What Makes This Agentic
+## Quickstart
 
-RevenuePilot is **not** a chatbot interface. It:
+### Prerequisites
+- Python 3.11+
+- Node.js 18+
 
-- Plans multi-step actions autonomously  
-- Delegates tasks across specialized agents  
-- Uses structured enterprise data  
-- Maintains system memory  
-- Produces measurable business impact  
+### 1 – Backend
 
----
+```bash
+# Clone & enter project
+git clone https://github.com/your-org/revenue-pilot.git
+cd revenue-pilot
 
-### Technical Stack
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate        # Windows: venv\Scripts\activate
 
-**Backend**:  
-- Python  
-- FastAPI  
-- Structured multi-agent orchestration (CrewAI-inspired patterns)  
-- Snowflake integration-ready  
+# Install dependencies
+pip install -r requirements.txt
 
-**Frontend**:  
-- React dashboard  
-- Human-in-the-loop approval interface  
-- Real-time action log  
+# Configure environment
+cp .env.example .env
+# Edit .env with your Snowflake / Composio credentials
 
-**Optional / Future Integrations**:  
-- Gmail, Slack, CRM systems via Composio connectors  
-- Real-time data monitoring and predictive alerting  
+# Start API server
+uvicorn main:app --reload --port 8000
+```
 
----
+API docs available at **http://localhost:8000/docs**
 
-### Measurable Outcomes
+### 2 – Frontend
 
-- Total at-risk revenue identified  
-- Recovery strategy execution rate  
-- Projected recovery percentage  
-- Human time saved  
+```bash
+cd frontend
+npm install
+npm start
+```
 
----
-
-### Roadmap
-
-- Real-time Snowflake integration  
-- Multi-agent optimization for complex workflows  
-- Autonomous escalation workflows  
-- Continuous learning loop from prior outcomes  
-- Enhanced predictive revenue pattern detection  
+Dashboard available at **http://localhost:3000**
 
 ---
 
-### Team
+## API Reference
 
-Built by a 3-person team focused on production-ready multi-agent AI systems, combining backend reliability with intuitive UX for enterprise decision-making.
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/health` | Service health check |
+| `POST` | `/api/analyze` | Run full agent pipeline on a list of accounts |
+| `GET` | `/api/pending-approvals` | Strategies awaiting human sign-off |
+| `POST` | `/api/approve-strategy` | Approve or reject a pending strategy |
+| `GET` | `/api/metrics` | Cumulative audit metrics |
+
+### POST `/api/analyze` – example request
+
+```json
+{
+  "accounts": [
+    {
+      "id": "acc_001",
+      "name": "TechCorp Solutions",
+      "contract_end": "2026-04-15",
+      "annual_value": 150000
+    }
+  ]
+}
+```
+
+### POST `/api/approve-strategy` – example request
+
+```json
+{
+  "account_id": "acc_001",
+  "approved": true,
+  "notes": "Approved by VP Sales"
+}
+```
 
 ---
 
-### Note for Hackathon Reviewers
+## Risk Scoring Model
 
-Core business logic and agent workflows will be implemented during the official hackathon build window to ensure fair competition. Current repo contains architecture, agent scaffolding, and mock data for demonstration and rapid development.
+The `RiskAgent` scores accounts on four weighted signals:
+
+| Signal | Max contribution |
+|---|---|
+| Overdue invoices (days overdue / 100) | 0.40 |
+| Usage drop (drop % / 100) | 0.30 |
+| Contract proximity (30 / 90 / 180 day bands) | 0.20 |
+| Payment history (late payments × 0.025) | 0.10 |
+
+Scores ≥ 0.70 → **HIGH** · 0.40–0.69 → **MEDIUM** · < 0.40 → **LOW**
+
+Strategies with estimated recovery > $10,000 or priority = `high` are routed to the human-in-the-loop approval queue before execution.
+
+---
+
+## Environment Variables
+
+See [`.env.example`](.env.example) for the full list. Key variables:
+
+| Variable | Purpose |
+|---|---|
+| `SNOWFLAKE_ACCOUNT` | Snowflake account identifier |
+| `COMPOSIO_API_KEY` | Composio key for Gmail / Slack / CRM |
+| `APPROVAL_THRESHOLD_AMOUNT` | $ threshold for human approval (default 10000) |
+| `HIGH_RISK_SCORE_THRESHOLD` | Risk score threshold for HIGH classification (default 0.7) |
+
+---
+
+## Tech Stack
+
+**Backend:** Python · FastAPI · asyncio · Pydantic v2  
+**Data:** Snowflake (integration-ready) · Pandas  
+**Integrations:** Composio (Gmail · Slack · CRM)  
+**Frontend:** React 18 · Axios  
+**Hackathon sponsors:** CrewAI · Composio · Skyfire · Snowflake · Llama Lounge
+
+---
+
+## Project Structure
+
+```
+revenue_pilot/
+├── agents/
+│   ├── __init__.py
+│   ├── orchestrator.py      # Central coordination layer
+│   ├── base_agent.py        # Abstract base with logging
+│   ├── data_agent.py        # Snowflake queries & signal detection
+│   ├── risk_agent.py        # 4-factor risk scoring
+│   ├── strategy_agent.py    # Recovery playbook selection
+│   ├── execution_agent.py   # Composio integrations & HITL queue
+│   └── audit_agent.py       # Metrics, reporting, explainability
+├── frontend/
+│   ├── package.json
+│   └── src/components/
+│       └── Dashboard.jsx    # React operator dashboard
+├── utils/
+│   ├── __init__.py
+│   └── mock_data.py         # Demo accounts for development
+├── main.py                  # FastAPI application
+├── config.py                # Environment config
+├── requirements.txt
+├── .env.example
+└── README.md
+```
+
+---
+
+multi-agent AI systems combining backend reliability with intuitive UX for enterprise decision-making
