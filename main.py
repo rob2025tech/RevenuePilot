@@ -1,48 +1,56 @@
+# main.py
 """
-main.py
-FastAPI backend for RevenuePilot.
+RevenuePilot + Shadow Operator — FastAPI Backend
+================================================
+
+Changes from original:
+- /api/pending-approvals  now reads from orchestrator.get_guardian_queue()
+  instead of execution_agent.approval_queue
+- /api/approve-strategy   now calls orchestrator.approve_guardian_decision()
+  which runs the full Guardian → Execution flow
+- /api/guardian-queue     NEW — exposes both approval + hold queues with
+  full risk scores and step-level decisions for the frontend
 """
 
-from __future__ import annotations
-
-from typing import List, Optional
-
-import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
+from typing import List, Optional
+import uvicorn
 
-from agents.audit_agent import AuditAgent
+from agents.orchestrator import RevenuePilotOrchestrator, AgentType
 from agents.data_agent import DataAgent
-from agents.execution_agent import ExecutionAgent
-from agents.orchestrator import AgentType, RevenuePilotOrchestrator
 from agents.risk_agent import RiskAgent
 from agents.strategy_agent import StrategyAgent
+from agents.execution_agent import ExecutionAgent
+from agents.audit_agent import AuditAgent
 
-app = FastAPI(title="RevenuePilot API", version="1.0.0")
+app = FastAPI(
+    title="RevenuePilot API",
+    description="Revenue intelligence with Shadow Operator safety gates",
+    version="2.0.0",
+)
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],
-    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ---------------------------------------------------------------------------
-# Agent initialisation
-# ---------------------------------------------------------------------------
+# ── Initialize orchestrator ───────────────────────────────────
+
 orchestrator = RevenuePilotOrchestrator()
 orchestrator.register_agent(AgentType.DATA, DataAgent())
 orchestrator.register_agent(AgentType.RISK, RiskAgent())
 orchestrator.register_agent(AgentType.STRATEGY, StrategyAgent())
 orchestrator.register_agent(AgentType.EXECUTION, ExecutionAgent())
 orchestrator.register_agent(AgentType.AUDIT, AuditAgent())
+# Note: GuardianAgent is built into the orchestrator directly —
+# no separate registration needed.
 
-# ---------------------------------------------------------------------------
-# Pydantic models
-# ---------------------------------------------------------------------------
 
+# ── Pydantic models ───────────────────────────────────────────
 
 class Account(BaseModel):
     id: str
@@ -52,87 +60,100 @@ class Account(BaseModel):
 
 
 class AnalysisRequest(BaseModel):
-    accounts: List[Account] = Field(..., min_items=1)
+    accounts: List[Account]
 
 
 class ApprovalRequest(BaseModel):
-    account_id: str  # FIX: renamed from strategy_id – matches approval_queue key
+    account_id: str          # changed from strategy_id for clarity
     approved: bool
-    notes: Optional[str] = None
+    notes: Optional[str] = ""
 
 
-# ---------------------------------------------------------------------------
-# Endpoints
-# ---------------------------------------------------------------------------
+# ── Endpoints ─────────────────────────────────────────────────
+
+@app.post("/api/analyze")
+async def analyze_revenue_risk(request: AnalysisRequest):
+    """
+    Main pipeline endpoint.
+    Runs: Data → Risk → Strategy → Guardian → Execution → Audit
+    Auto-safe actions execute immediately. Others land in Guardian queues.
+    """
+    try:
+        accounts_data = [a.dict() for a in request.accounts]
+        result = await orchestrator.process_revenue_signals(accounts_data)
+        return {
+            "status": "success",
+            "data": result,
+            "message": f"Analyzed {len(accounts_data)} accounts",
+            "guardian_summary": result.get("guardian"),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/pending-approvals")
+async def get_pending_approvals():
+    """
+    Returns Guardian-queued strategies awaiting human review.
+    Includes both HUMAN_APPROVAL_REQUIRED and HOLD_FOR_REVIEW buckets,
+    with full risk scores and step-level decisions.
+    """
+    return orchestrator.get_guardian_queue()
+
+
+@app.post("/api/approve-strategy")
+async def approve_strategy(request: ApprovalRequest):
+    """
+    Human approves or rejects a Guardian-queued strategy.
+    On approval: immediately dispatched to ExecutionAgent via Composio.
+    On rejection: removed from queue and logged.
+    """
+    try:
+        result = await orchestrator.approve_guardian_decision(
+            account_id=request.account_id,
+            approved=request.approved,
+            approver_notes=request.notes or "",
+        )
+        if result["status"] == "not_found":
+            raise HTTPException(
+                status_code=404,
+                detail=f"No pending Guardian decision for account {request.account_id}"
+            )
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/guardian-queue")
+async def get_guardian_queue():
+    """
+    NEW endpoint — full Guardian queue view for the Shadow Operator UI.
+    Returns risk scores, factors, and step-level decisions.
+    Designed to feed the parallel reality simulation panel.
+    """
+    return orchestrator.get_guardian_queue()
+
+
+@app.get("/api/metrics")
+async def get_metrics():
+    """Current metrics from AuditAgent."""
+    audit_agent = orchestrator.agents.get(AgentType.AUDIT)
+    if not audit_agent:
+        raise HTTPException(status_code=503, detail="AuditAgent not registered")
+    return audit_agent.metrics
 
 
 @app.get("/api/health")
 async def health_check():
     return {
         "status": "healthy",
-        "service": "RevenuePilot",
-        "registered_agents": [a.value for a in orchestrator.agents],
+        "service": "RevenuePilot + Shadow Operator",
+        "guardian_queue_depth": len(orchestrator.guardian_approval_queue),
+        "guardian_hold_depth": len(orchestrator.guardian_hold_queue),
     }
 
 
-@app.post("/api/analyze")
-async def analyze_revenue_risk(request: AnalysisRequest):
-    """Main endpoint – runs all accounts through the full agent pipeline."""
-    try:
-        # FIX: use model_dump() (Pydantic v2) with fallback to dict() for v1
-        accounts_data = [
-            a.model_dump() if hasattr(a, "model_dump") else a.dict()
-            for a in request.accounts
-        ]
-        result = await orchestrator.process_revenue_signals(accounts_data)
-        return {
-            "status": "success",
-            "data": result,
-            "message": f"Analysed {len(accounts_data)} account(s)",
-        }
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
-
-
-@app.get("/api/pending-approvals")
-async def get_pending_approvals():
-    """Return strategies waiting for human approval."""
-    execution_agent: ExecutionAgent = orchestrator.agents.get(AgentType.EXECUTION)
-    # FIX: approval_queue is now a dict; return its values as a list
-    return {"pending": list(execution_agent.approval_queue.values())}
-
-
-@app.post("/api/approve-strategy")
-async def approve_strategy(request: ApprovalRequest):
-    """Approve or reject a pending strategy."""
-    execution_agent: ExecutionAgent = orchestrator.agents.get(AgentType.EXECUTION)
-
-    if request.approved:
-        # FIX: uses the new O(1) method instead of a list scan
-        result = await execution_agent.execute_approved_strategy(request.account_id)
-        if result is None:
-            raise HTTPException(
-                status_code=404,
-                detail=f"No pending strategy found for account '{request.account_id}'",
-            )
-        return {"status": "executed", "result": result}
-
-    # Rejection path: remove from queue without executing
-    removed = execution_agent.approval_queue.pop(request.account_id, None)
-    if removed is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No pending strategy found for account '{request.account_id}'",
-        )
-    return {"status": "rejected", "notes": request.notes}
-
-
-@app.get("/api/metrics")
-async def get_metrics():
-    """Return cumulative metrics from the Audit agent."""
-    audit_agent: AuditAgent = orchestrator.agents.get(AgentType.AUDIT)
-    return audit_agent.metrics
-
-
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000, reload=False)
+    uvicorn.run(app, host="0.0.0.0", port=8000)
