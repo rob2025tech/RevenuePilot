@@ -80,8 +80,16 @@ class ExecutionAgent(BaseAgent):
     async def process(self, message) -> Dict[str, Any]:
         strategies: List[Dict] = message.content.get("strategies", [])
 
-        needs_approval = [s for s in strategies if self._requires_approval(s)]
-        auto_execute = [s for s in strategies if not self._requires_approval(s)]
+        # FIX (demo hardening): a strategy that already cleared Guardian human
+        # approval must NOT be re-gated here. Re-applying _requires_approval would
+        # silently re-queue it (auto_executed=0) and the approved action would
+        # never run. The orchestrator marks such dispatches with human_approved.
+        if message.content.get("human_approved"):
+            needs_approval: List[Dict] = []
+            auto_execute: List[Dict] = list(strategies)
+        else:
+            needs_approval = [s for s in strategies if self._requires_approval(s)]
+            auto_execute = [s for s in strategies if not self._requires_approval(s)]
 
         # Queue strategies that need human sign-off
         for s in needs_approval:

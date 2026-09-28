@@ -14,7 +14,7 @@ Changes from original:
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import List, Optional
 import uvicorn
 
@@ -53,6 +53,13 @@ orchestrator.register_agent(AgentType.AUDIT, AuditAgent())
 # ── Pydantic models ───────────────────────────────────────────
 
 class Account(BaseModel):
+    # Allow the optional risk-signal fields carried by utils.mock_data
+    # (overdue_invoices / usage_drop / payment_delays) to pass through to the
+    # pipeline. Without this, POST /api/analyze silently dropped them and every
+    # account scored LOW, so the Guardian/HITL story could not be demonstrated
+    # over HTTP. Basic 4-field requests are unaffected.
+    model_config = ConfigDict(extra="allow")
+
     id: str
     name: str
     contract_end: Optional[str] = None

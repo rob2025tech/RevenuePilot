@@ -396,6 +396,8 @@ class RevenuePilotOrchestrator:
                 {
                     "strategies": [target["strategy"]],
                     "action": "execute_outreach",
+                    # Human already approved via Guardian: execute, do not re-gate.
+                    "human_approved": True,
                 }
             )
             return {
