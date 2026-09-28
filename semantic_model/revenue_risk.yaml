@@ -1,0 +1,89 @@
+# RevenuePilot — minimal Cortex Analyst semantic model
+# ============================================================================
+# Smallest possible model that exposes the per-account revenue-risk fields the
+# existing DataAgent / RiskAgent pipeline already consumes. Structure mirrors
+# the reference model at:
+#   ~/Projects/Snowflake/sfguide-getting-started-with-cortex-analyst/
+#       revenue_timeseries.yaml
+# (reference only — that repository is not modified).
+#
+# RevenuePilot NEVER provisions Snowflake objects from Python. Stage manually:
+#
+#   1. Ensure the base table REVENUE_PILOT.PUBLIC.ACCOUNT_RISK exists with the
+#      columns declared under `dimensions` / `measures` below.
+#   2. CREATE STAGE REVENUE_PILOT.PUBLIC.CORTEX_SEMANTIC_MODEL;
+#   3. PUT file://semantic_model/revenue_risk.yaml
+#        @REVENUE_PILOT.PUBLIC.CORTEX_SEMANTIC_MODEL
+#        AUTO_COMPRESS=FALSE OVERWRITE=TRUE;
+#   4. Set env:  SNOWFLAKE_STAGE=CORTEX_SEMANTIC_MODEL
+#                CORTEX_SEMANTIC_MODEL_FILE=revenue_risk.yaml
+#      Resolved REST reference:
+#        @REVENUE_PILOT.PUBLIC.CORTEX_SEMANTIC_MODEL/revenue_risk.yaml
+#
+# If your database/schema/table names differ, edit `base_table` below AND the
+# matching SNOWFLAKE_DATABASE / SNOWFLAKE_SCHEMA env values so they agree.
+# ============================================================================
+
+name: revenue_pilot_account_risk
+description: >
+  Per-account revenue-risk signals for RevenuePilot. Cortex Analyst uses this
+  model to generate SQL returning the fields normalized into RiskAgent inputs.
+
+tables:
+  - name: account_risk
+    description: One row per customer account with revenue-risk signals.
+    base_table:
+      database: REVENUE_PILOT
+      schema: PUBLIC
+      table: ACCOUNT_RISK
+    primary_key:
+      columns:
+        - account_id
+    dimensions:
+      - name: account_id
+        expr: account_id
+        data_type: varchar
+        description: Unique account identifier.
+      - name: account_name
+        expr: account_name
+        data_type: varchar
+        description: Customer account name.
+      - name: contract_end_date
+        expr: contract_end_date
+        data_type: date
+        description: Contract end date (YYYY-MM-DD).
+      - name: has_overdue
+        expr: has_overdue
+        data_type: boolean
+        description: Whether the account currently has overdue invoices.
+    measures:
+      - name: annual_value
+        expr: annual_value
+        data_type: number
+        default_aggregation: sum
+        description: Annual contract value (ARR) in USD.
+      - name: overdue_amount
+        expr: overdue_amount
+        data_type: number
+        default_aggregation: sum
+        description: Total overdue invoice amount in USD.
+      - name: days_overdue
+        expr: days_overdue
+        data_type: number
+        default_aggregation: max
+        description: Maximum number of days an invoice is overdue.
+      - name: usage_drop_percent
+        expr: usage_drop_percent
+        data_type: number
+        default_aggregation: avg
+        description: Percent decline in product usage versus the previous period.
+      - name: late_payments_last_6m
+        expr: late_payments_last_6m
+        data_type: number
+        default_aggregation: sum
+        description: Count of late payments in the last six months.
+      - name: average_days_late
+        expr: average_days_late
+        data_type: number
+        default_aggregation: avg
+        description: Average number of days payments are late.

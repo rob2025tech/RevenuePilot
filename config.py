@@ -20,6 +20,14 @@ class Config:
     SNOWFLAKE_WAREHOUSE: str = os.getenv("SNOWFLAKE_WAREHOUSE", "")
     SNOWFLAKE_DATABASE: str = os.getenv("SNOWFLAKE_DATABASE", "")
     SNOWFLAKE_SCHEMA: str = os.getenv("SNOWFLAKE_SCHEMA", "PUBLIC")
+    SNOWFLAKE_ROLE: str = os.getenv("SNOWFLAKE_ROLE", "")
+
+    # Cortex Analyst (staged semantic model). When STAGE + FILE are set (and
+    # the connection values above are present), DataAgent attempts the live
+    # Cortex Analyst path; otherwise it uses the deterministic mock data.
+    SNOWFLAKE_STAGE: str = os.getenv("SNOWFLAKE_STAGE", "")
+    CORTEX_SEMANTIC_MODEL_FILE: str = os.getenv("CORTEX_SEMANTIC_MODEL_FILE", "")
+    CORTEX_ANALYST_QUESTION: str = os.getenv("CORTEX_ANALYST_QUESTION", "")
 
     # Composio
     COMPOSIO_API_KEY: str = os.getenv("COMPOSIO_API_KEY", "")

@@ -14,9 +14,9 @@ python-dotenv==1.0.1
 # Data processing
 pandas==2.2.3
 
-# Snowflake connector (comment out if not using Snowflake yet)
-# snowflake-connector-python==3.12.4
-# snowflake-sqlalchemy==1.6.1
+# Snowflake connector (Cortex Analyst data layer)
+snowflake-connector-python==3.12.4
+# snowflake-sqlalchemy==1.6.1   # not required; Cortex module uses raw SQL cursors
 
 # Composio integration (comment out if not using Composio yet)
 # composio-core==0.6.0
